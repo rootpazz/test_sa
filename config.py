@@ -12,7 +12,7 @@ MODEL_NAME = 'Helsinki-NLP/opus-mt-ru-en'
 # MODEL_NAME = 'Helsinki-NLP/opus-mt-ru-es'
 
 # API-ключ для ElevenLabsы
-ELEVEN_LABS_API_KEY = " "
+ELEVEN_LABS_API_KEY = "your_api_key_here"
 
 # Настройки голоса
 VOICE_NAME = "Rachel"
