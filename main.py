@@ -1,6 +1,10 @@
 from config import device
 from translator import Translator
 from audio_generator import AudioGenerator
+import threading
+import queue
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="transformers")
 
 
 def main():
@@ -14,35 +18,68 @@ def main():
         print(f"Ошибка инициализации: {e}")
         return
 
-    # Настройка перевода
+    # Настройка
     translation_enabled = True
+    use_streaming = True  # Использовать стриминг для скорости
+
     print(f"Перевод: {'включен' if translation_enabled else 'отключен'}")
+    print(f"Стриминг: {'включен' if use_streaming else 'отключен'}")
 
     # Интерактивный цикл
     print("\nКоманды:")
     print("- Введите текст для обработки")
-    print("- 'перевод вкл' - включить перевод")
-    print("- 'перевод выкл' - отключить перевод")
-    print("- 'статус' - показать текущие настройки")
+    print("- 'перевод вкл/выкл' - управление переводом")
+    print("- 'стриминг вкл/выкл' - управление стримингом")
+    print("- 'статус' - показать настройки")
     print("- 'выход' - завершить программу")
+
+    # Очередь для параллельной обработки
+    audio_queue = queue.Queue()
+
+    def audio_worker():
+        """Воркер для асинхронного воспроизведения аудио"""
+        while True:
+            item = audio_queue.get()
+            if item is None:
+                break
+            text, use_stream = item
+            if use_stream:
+                audio_generator.generate_and_play_stream(text)
+            else:
+                audio_generator.generate_and_play_file(text)
+            audio_queue.task_done()
+
+    # Запускаем воркер в отдельном потоке
+    audio_thread = threading.Thread(target=audio_worker, daemon=True)
+    audio_thread.start()
 
     while True:
         text = input("\nВвод: ").strip()
 
         # Команды управления
         if text.lower() in ["выход", "exit", "quit"]:
+            audio_queue.put(None)  # Сигнал для завершения воркера
             print("Программа завершена.")
             break
-        elif text.lower() in ["перевод вкл", "translation on"]:
+        elif text.lower() == "перевод вкл":
             translation_enabled = True
             print("Перевод включен.")
             continue
-        elif text.lower() in ["перевод выкл", "translation off"]:
+        elif text.lower() == "перевод выкл":
             translation_enabled = False
             print("Перевод отключен.")
             continue
-        elif text.lower() in ["статус", "status"]:
+        elif text.lower() == "стриминг вкл":
+            use_streaming = True
+            print("Стриминг включен.")
+            continue
+        elif text.lower() == "стриминг выкл":
+            use_streaming = False
+            print("Стриминг отключен.")
+            continue
+        elif text.lower() == "статус":
             print(f"Перевод: {'включен' if translation_enabled else 'отключен'}")
+            print(f"Стриминг: {'включен' if use_streaming else 'отключен'}")
             continue
         elif not text:
             print("Пожалуйста, введите текст или команду.")
@@ -51,21 +88,24 @@ def main():
         # Обработка текста
         try:
             if translation_enabled:
+                # Начинаем перевод
                 translated_text = translator.translate(text)
                 print("Перевод:", translated_text)
                 final_text = translated_text
             else:
                 print("Исходный текст:", text)
                 final_text = text
-        except Exception:
-            continue
 
-        # Генерация и воспроизведение аудио
-        try:
-            audio_generator.generate_and_play(final_text)
-        except Exception:
+            # Отправляем в очередь для параллельного воспроизведения
+            audio_queue.put((final_text, use_streaming))
+
+        except Exception as e:
+            print(f"Ошибка обработки: {e}")
             continue
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n ступай! 👋")
