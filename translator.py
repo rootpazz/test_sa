@@ -11,19 +11,45 @@ class Translator:
 
     def load_model(self):
         try:
+            # Загружаем модель с оптимизациями
             self.tokenizer = MarianTokenizer.from_pretrained(MODEL_NAME)
             self.model = MarianMTModel.from_pretrained(MODEL_NAME).to(device)
-            print("Модель перевода успешно загружена.")
+
+            # Включаем eval mode для ускорения
+            self.model.eval()
+
+            # Компилируем модель для MPS 
+            if device.type == "mps":
+                self.model = torch.compile(self.model, mode="reduce-overhead")
+
+            print("Модель перевода успешно загружена и оптимизирована.")
         except Exception as e:
             print(f"Ошибка при загрузке модели перевода: {e}")
             raise e
 
+    @torch.no_grad()  # Отключаем градиенты для ускорения
     def translate(self, text):
         try:
-            inputs = self.tokenizer(text, return_tensors="pt", padding=True).to(device)
-            translated = self.model.generate(**inputs)
+            # Токенизация с ограничением длины
+            inputs = self.tokenizer(
+                text,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=128  # Ограничиваем длину для скорости
+            ).to(device)
+
+            # Генерация с оптимизированными параметрами
+            translated = self.model.generate(
+                **inputs,
+                max_length=128,
+                num_beams=1,  # Отключаем beam search для скорости
+                do_sample=False,
+                early_stopping=True
+            )
+
             translated_text = self.tokenizer.decode(translated[0], skip_special_tokens=True)
             return translated_text
         except Exception as e:
             print(f"Ошибка при переводе: {e}")
-            raise e
+            return text  # Возвращаем исходный текст при ошибке
