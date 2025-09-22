@@ -1,4 +1,6 @@
 torch
 transformers
-elevenlabs
+elevenlabs>=1.0.0
 sentencepiece
+pyaudio
+pydub
